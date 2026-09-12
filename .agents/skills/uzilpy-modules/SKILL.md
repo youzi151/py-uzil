@@ -1,13 +1,15 @@
 ---
 name: uzilpy-modules
-description: Describes concepts and behavior of src/uzilpy modules (BufferStreamer, IDPool, Invoker, config). Use when explaining, documenting, or implementing against uzilpy, buffer streaming, stream_bdict, invoker loops, or uzcfg.
+description: Describes concepts and behavior of src/uzilpy modules (BufferStreamer, IDPool, Invoker, config, UTQ). Use when explaining, documenting, or implementing against uzilpy, buffer streaming, stream_bdict, invoker loops, uzcfg, or tag query (UTQ).
 ---
 
 # uzilpy modules
 
-Package `src/uzilpy`. Public surface (`__init__.py`): `invoker`, `BufferStreamer`, `uzcfg` (`config` aliased). `IDPool` is internal to streaming, not re-exported.
+Package `src/uzilpy`. Public surface (`__init__.py`): `invoker`, `BufferStreamer`, `uzcfg` (`config` aliased), `utq`. `IDPool` is internal to streaming, not re-exported.
 
-These modules are small building blocks: a framed binary stream, a bounded ID lease, a frame-timed callback loop, and cached JSON config. They do not form a full app runtime by themselves.
+These modules are small building blocks: a framed binary stream, a bounded ID lease, a frame-timed callback loop, cached JSON config, and a tag query language. They do not form a full app runtime by themselves.
+
+For UTQ syntax, matching, and `Inst`/`Queryer`/`Executor` behavior, see [utq.md](utq.md).
 
 ## `buffer_streamer.py` — `BufferStreamer`
 
@@ -167,6 +169,12 @@ Both default `file_path` to `{root_dir}/config_runtime.json`.
 
 Deep merge used by `use`. Keys only in `dict_a` are **kept**. Nested dicts recurse; other types in `dict_b` replace. Files are loaded left-to-right: later files overlay earlier ones without dropping unspecified keys.
 
+## `utq/` — `UTQ`
+
+In-memory tag query. Named **targets** hold `Tag` lists (`scope:val`). `Inst.query` matches one tag expression; `Inst.search` combines expressions with `& | % >` and `()`.
+
+Details (grammar, `SearchType` pass order, operators, `set_data`): [utq.md](utq.md).
+
 ## How they relate
 
 ```
@@ -174,6 +182,8 @@ uzcfg.use(...)          → static settings (cached dict)
 invoker.inst(...).start_loop()  → timed/queued work
 BufferStreamer.stream_bdict / stream_data(sendfn)
         → IDPool lease → framed packets → sendfn
+UTQ().inst(key).set_data / .search / .query
+        → Queryer match; Executor boolean-combines queries
 ```
 
-`Invoker` does not drive `BufferStreamer`. Streaming is awaited in the caller’s coroutine; the invoker is optional for app ticks, delays, and background coroutines.
+`Invoker` does not drive `BufferStreamer`. Streaming is awaited in the caller’s coroutine; the invoker is optional for app ticks, delays, and background coroutines. UTQ is independent of streaming and the invoker.
