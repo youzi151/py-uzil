@@ -13,12 +13,30 @@ class Executor:
         self._inst = inst
 
     def search(self, search_str: str) -> dict[str, bool]:
-        parsed_tokens = self.parse_search_str(search_str)
+        tokens = self._tokenize_str(search_str)
+        if not self._parens_balanced(tokens):
+            return {}
+        parsed_tokens = self._parse_tokens(tokens)
         return self._execute_tokens(parsed_tokens)
 
     def parse_search_str(self, search_str: str) -> list[Token]:
         tokens = self._tokenize_str(search_str)
+        if not self._parens_balanced(tokens):
+            return []
         return self._parse_tokens(tokens)
+
+    def _parens_balanced(self, tokens: list[Token]) -> bool:
+        depth = 0
+        for token in tokens:
+            if token[0] != "o":
+                continue
+            if token[1] == "(":
+                depth += 1
+            elif token[1] == ")":
+                depth -= 1
+                if depth < 0:
+                    return False
+        return depth == 0
 
     def _tokenize_str(self, search_str: str) -> list[Token]:
         tokens: list[Token] = []
@@ -56,6 +74,7 @@ class Executor:
         result: list[Token] = []
         idx = start_idx
         depth = 1 if is_bracket else 0
+        closed = False
         operators = set(self._inst.cfg.operators)
 
         while idx < len(tokens) and (not is_bracket or depth > 0):
@@ -70,6 +89,8 @@ class Executor:
                     idx = nested_result[1] - 1
                 elif content == ")":
                     depth -= 1
+                    if is_bracket and depth == 0:
+                        closed = True
                 elif content in operators:
                     result.append(token)
             elif kind == "s":
@@ -77,12 +98,13 @@ class Executor:
             idx += 1
 
         if is_bracket:
-            idx -= 1
+            if closed:
+                idx -= 1
             return [["g", result], idx]
         return result
 
     def _execute_tokens(self, tokens: list[Token]) -> dict[str, bool]:
-        results: dict[str, bool] = {}
+        results: dict[str, bool] | None = None
         current_operator = ""
         cfg = self._inst.cfg
 
@@ -93,14 +115,29 @@ class Executor:
                 continue
             if kind == "g":
                 bracket_result = self._execute_tokens(token[1])
-                if not current_operator:
-                    results = bracket_result
-                else:
+                if results is None:
+                    if current_operator:
+                        results = self._apply_operator({}, bracket_result, "", current_operator)
+                    else:
+                        results = bracket_result
+                elif current_operator:
                     results = self._apply_operator(results, bracket_result, "", current_operator)
+                else:
+                    results = bracket_result
                 continue
             if kind == "s":
-                if not results:
-                    results = self._inst.queryer.query(token[1])
+                if results is None:
+                    if current_operator == cfg.operator_fallback:
+                        results = self._apply_operator({}, {}, token[1], current_operator)
+                    elif current_operator:
+                        results = self._apply_operator(
+                            {},
+                            self._inst.queryer.query(token[1]),
+                            "",
+                            current_operator,
+                        )
+                    else:
+                        results = self._inst.queryer.query(token[1])
                 elif current_operator:
                     if current_operator == cfg.operator_fallback:
                         results = self._apply_operator(results, {}, token[1], current_operator)
@@ -111,7 +148,7 @@ class Executor:
                             "",
                             current_operator,
                         )
-        return results
+        return results if results is not None else {}
 
     def _apply_operator(
         self,

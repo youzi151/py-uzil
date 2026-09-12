@@ -38,7 +38,7 @@ class UTQ:
             scope=str(kwargs.get("scope", "")),
             val=str(kwargs.get("val", "")),
             attr=str(kwargs.get("attr", "")),
-            search_type=int(kwargs.get("search_type", 0)),
+            search_type=int(kwargs.get("search_type", SearchType.REQUIRED)),
         )
 
 

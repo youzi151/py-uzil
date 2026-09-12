@@ -10,7 +10,7 @@ Import: `from uzilpy import utq` then `utq.UTQ`, or `from uzilpy.utq import UTQ,
 UTQ
   inst(key="_")     → cached Inst (same key → same instance)
   once(data?)       → throwaway Inst (optional target→tags dict)
-  tag(**kwargs)     → Tag (defaults search_type=0 = EXCLUDE)
+  tag(**kwargs)     → Tag (defaults search_type=REQUIRED)
 
 Inst
   set_data / get_data / has_data / clear_datas
@@ -88,9 +88,15 @@ Tokenize on `() & % | >` outside quotes. Adjacent text with no operator is **one
 
 `>` does not query the right side unless the left result is empty.
 
-Parentheses recurse as a nested execute, then combine with the current operator.
+Parentheses recurse as a nested execute, then combine with the current operator. Unbalanced `(` / `)` → `search` returns `{}` (no exception). Nested parse that never sees `)` must not rewind onto the opening `(`.
 
-Juxtaposition of two query tokens **without** an operator: the second token is ignored once `results` is non-empty. Use `&` for AND of two expressions.
+No operator precedence: `A | B & C` is left-folded `(A|B) & C`.
+
+An empty left-hand set is still a set. `role:missing & role:tank` stays `{}` (do not treat `{}` as “no query yet”). Leading `& role:tank` is also `{}`. `|` / `%` with empty left look like the right side; `>` with empty left takes the right side.
+
+`search("")` → no tokens → `{}`. `query("")` → no constraints → every target. Apps that want “empty q means all” must special-case that themselves.
+
+Juxtaposition of two query tokens **without** an operator: the second `"s"` token is ignored once a left-hand set exists. Use `&` for AND of two expressions.
 
 ## `set_data`
 
@@ -102,7 +108,7 @@ String values are parsed with `parse_query_str`. **Only `REQUIRED` tags are stor
 
 ## Quirks
 
-- `Tag()` / `UTQ.tag()` default `search_type=0` (`EXCLUDE`), not `REQUIRED`. Parsed query strings default to `REQUIRED`.
 - `Cfg.separator_tag_same_scope` vs `seperator_*` spelling is as in code.
-- `attr_conflict` `!`, `attr_required` `@`, `attr_hidden` `#` are config constants only; matching does not interpret them.
+- `attr_conflict` `!`, `attr_required` `@`, `attr_hidden` `#` are stored/config only; `has_matching_tag` does not interpret them (external use).
 - Quote toggling in the executor treats `"` and `'` as the same in/out flag (mixed quotes can mis-tokenize).
+- Query clean uses match spans so a quoted inner is not `str.replace`d elsewhere in the string.

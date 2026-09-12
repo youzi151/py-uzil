@@ -9,7 +9,7 @@ class Tag:
         scope: str = "",
         val: str = "",
         attr: str = "",
-        search_type: int = 0,
+        search_type: int = SearchType.REQUIRED,
         wild_excepts: list[str] | None = None,
     ) -> None:
         self.scope = scope
@@ -42,11 +42,6 @@ class Tag:
         if not self.val:
             return "<invalid tag>"
         prefix = {
-            -2: "--",
-            -1: "-",
-            0: "*",
-            1: "+",
-            2: "",
             SearchType.EXCLUDE: "--",
             SearchType.WITHOUT: "-",
             SearchType.TOLERANT: "*",

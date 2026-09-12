@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from uzilpy.utq import UTQ, Tag
+from uzilpy.utq import UTQ, SearchType, Tag
 
 
 def keys(result: dict) -> list[str]:
@@ -226,10 +226,60 @@ def test_scenario_advanced_queries():
         name for name in all_names if name not in ice_ranged_or_fire_melee
     ]
 
-    assert keys(inst.search(". % (屬性:. 範圍:近 | (屬性:聖 & *範圍:遠 *類型:魔法)")) == [
+    assert keys(inst.search(". % (屬性:. 範圍:近 | (屬性:聖 & *範圍:遠 *類型:魔法))")) == [
         "鐵劍(火球術)",
         "鐵斧",
         "火焰杖",
         "冰霜杖",
         "長弓",
     ]
+
+
+def _people():
+    inst = UTQ().once()
+    inst.set_data("Aman", ["role:dps", "gender:male"])
+    inst.set_data("Bwoman", ["role:tank", "gender:female"])
+    inst.set_data("Cman", ["role:sup", "gender:male"])
+    inst.set_data("Dman", ["role:sup,tank", "gender:male"])
+    return inst
+
+
+def test_unbalanced_parens_return_empty():
+    inst = _people()
+    assert inst.search("((((") == {}
+    assert inst.search("role:tank)") == {}
+    assert inst.search("(role:tank") == {}
+    assert keys(inst.search("(role:tank)")) == ["Bwoman", "Dman"]
+
+
+def test_empty_left_intersection():
+    inst = _people()
+    assert inst.search("role:missing & role:tank") == {}
+    assert keys(inst.search("role:missing | role:tank")) == ["Bwoman", "Dman"]
+    assert keys(inst.search("role:missing % role:tank")) == ["Bwoman", "Dman"]
+    assert keys(inst.search("role:missing > role:tank")) == ["Bwoman", "Dman"]
+    assert inst.search("& role:tank") == {}
+
+
+def test_empty_search_vs_query():
+    inst = _people()
+    assert inst.search("") == {}
+    assert keys(inst.query("")) == ["Aman", "Bwoman", "Cman", "Dman"]
+
+
+def test_tag_default_required_and_str():
+    tag = Tag(scope="role", val="tank")
+    assert tag.search_type == SearchType.REQUIRED
+    assert str(tag) == "<role:tank>"
+    wrapped = UTQ().tag(scope="role", val="tank")
+    assert wrapped.search_type == SearchType.REQUIRED
+    exclude = Tag(scope="role", val="tank", search_type=SearchType.EXCLUDE)
+    assert str(exclude) == "<--role:tank>"
+
+
+def test_clean_query_str_does_not_rewrite_outside_quotes():
+    inst = UTQ().once()
+    cfg = inst.cfg
+    cleaned = inst.queryer.get_clean_query_str('"ice frost" ice frost')
+    assert cleaned.count(cfg.temp_space_char) == 1
+    assert "ice frost" in cleaned

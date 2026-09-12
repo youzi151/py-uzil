@@ -31,22 +31,36 @@ class Queryer:
 
     def get_clean_query_str(self, query_str: str) -> str:
         cfg = self._inst.cfg
+        parts: list[str] = []
+        last = 0
         for match in cfg.any_in_quotes_regex.finditer(query_str):
-            inner = match.group(1)
-            to_replace = inner.replace(" ", cfg.temp_space_char)
-            query_str = query_str.replace(inner, to_replace)
+            inner_start, inner_end = match.span(1)
+            parts.append(query_str[last:inner_start])
+            parts.append(match.group(1).replace(" ", cfg.temp_space_char))
+            last = inner_end
+        parts.append(query_str[last:])
+        query_str = "".join(parts)
 
         while True:
             matches = list(cfg.redundant_space_regex.finditer(query_str))
+            pieces: list[str] = []
+            last = 0
             changed = False
             for each in matches:
                 raw = each.group(0)
                 trimed = each.group(1)
+                start, end = each.span(0)
+                pieces.append(query_str[last:start])
                 if raw != trimed:
-                    query_str = query_str.replace(raw, trimed)
+                    pieces.append(trimed)
                     changed = True
+                else:
+                    pieces.append(raw)
+                last = end
+            pieces.append(query_str[last:])
             if not changed:
                 break
+            query_str = "".join(pieces)
         # GDScript only strips spaces after :/, so "role : tank" stays split.
         # Also drop spaces immediately before : and , so " - role : tank" is "-role:tank".
         query_str = cfg.space_before_sep_regex.sub(r"\1", query_str)
